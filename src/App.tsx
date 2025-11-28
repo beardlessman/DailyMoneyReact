@@ -9,7 +9,7 @@ import { transactionStorage } from './utils/transactionStorage';
 
 function App() {
   const [currentView, setCurrentView] = useState<View>('add');
-  const { transactions, isLoading, addTransaction, deleteTransaction, hasUnsynchronizedTransactions } = useTransactions();
+  const { transactions, isLoading, addTransaction, deleteTransaction, hasUnsynchronizedTransactions, clearAllTransactions } = useTransactions();
 
   const handleSync = () => {
     // В офлайн-версии синхронизация просто сохраняет текущий timestamp
@@ -63,6 +63,11 @@ function App() {
         <SettingsView
           onClose={() => setCurrentView('log')}
           onExport={handleExport}
+          onClearAll={() => {
+            if (confirm('Вы уверены, что хотите удалить все транзакции? Это действие нельзя отменить.')) {
+              clearAllTransactions();
+            }
+          }}
         />
       )}
     </div>

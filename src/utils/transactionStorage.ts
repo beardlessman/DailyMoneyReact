@@ -9,13 +9,24 @@ export const transactionStorage = {
   getTransactions(): Transaction[] {
     try {
       const data = localStorage.getItem(STORAGE_KEY);
-      if (!data) return [];
+      if (!data) {
+        console.log('No transactions in storage');
+        return [];
+      }
       const parsed = JSON.parse(data);
-      return parsed.map((t: any) => ({
-        ...t,
-        date: new Date(t.date),
-      }));
-    } catch {
+      console.log('Parsed transactions from storage:', parsed);
+      const transactions = parsed.map((t: any) => {
+        const date = new Date(t.date);
+        console.log('Parsing transaction date:', t.date, '->', date);
+        return {
+          ...t,
+          date: date,
+        };
+      });
+      console.log('Final transactions after parsing:', transactions);
+      return transactions;
+    } catch (error) {
+      console.error('Error loading transactions:', error);
       return [];
     }
   },

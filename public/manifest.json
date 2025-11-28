@@ -1,0 +1,19 @@
+{
+  "name": "DailyMoney",
+  "short_name": "DailyMoney",
+  "description": "Приложение для учета ежедневных расходов",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/vite.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
+

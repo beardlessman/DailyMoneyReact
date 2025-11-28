@@ -83,13 +83,16 @@ export const budgetCalculator = {
       const monthSpent = this.getMonthSpentAmount(transactions);
       const remainingBudget = monthlyAmount - monthSpent;
 
+      // Рассчитываем остаток дней в месяце (включая сегодня) - как в iOS
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
       const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
       const endOfMonthDay = new Date(endOfMonth);
       endOfMonthDay.setHours(0, 0, 0, 0);
 
-      const daysRemaining =
-        Math.ceil((endOfMonthDay.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-      const daysRemainingIncludingToday = Math.max(1, daysRemaining);
+      // Количество дней от сегодня до конца месяца включительно (как в iOS)
+      // Используем ту же логику: dateComponents([.day], from: today, to: endOfMonthDay)
+      const daysRemaining = Math.floor((endOfMonthDay.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+      const daysRemainingIncludingToday = Math.max(1, daysRemaining + 1);
 
       const calculatedBudget = remainingBudget / daysRemainingIncludingToday;
       const roundedBudget = Math.floor(calculatedBudget / 500) * 500;

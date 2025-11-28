@@ -4,9 +4,10 @@ import { transactionStorage } from '../utils/transactionStorage';
 interface SettingsViewProps {
   onClose: () => void;
   onExport: () => void;
+  onClearAll: () => void;
 }
 
-export function SettingsView({ onClose, onExport }: SettingsViewProps) {
+export function SettingsView({ onClose, onExport, onClearAll }: SettingsViewProps) {
   const [monthlyAmount, setMonthlyAmount] = useState(120000);
 
   useEffect(() => {
@@ -24,6 +25,22 @@ export function SettingsView({ onClose, onExport }: SettingsViewProps) {
 
   return (
     <div className="flex flex-col h-screen">
+      {/* Navigation bar */}
+      <div className="flex items-center justify-between p-4 pt-12">
+        <button
+          onClick={onClose}
+          className="text-blue-500 font-medium px-2 py-1"
+        >
+          Отмена
+        </button>
+        <button
+          onClick={handleSave}
+          className="text-blue-500 font-medium px-2 py-1"
+        >
+          Сохранить
+        </button>
+      </div>
+
       <div className="flex-1 overflow-y-auto p-4">
         <h2 className="text-2xl font-bold mb-6">Настройки</h2>
 
@@ -47,22 +64,16 @@ export function SettingsView({ onClose, onExport }: SettingsViewProps) {
             Экспортировать лог
           </button>
         </div>
-      </div>
 
-      {/* Navigation */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 flex justify-between">
-        <button
-          onClick={onClose}
-          className="text-gray-600 font-medium"
-        >
-          Отмена
-        </button>
-        <button
-          onClick={handleSave}
-          className="text-blue-500 font-medium"
-        >
-          Сохранить
-        </button>
+        {/* Clear all button */}
+        <div className="mb-6">
+          <button
+            onClick={onClearAll}
+            className="w-full py-3 bg-red-500 text-white rounded-lg font-medium"
+          >
+            Очистить весь лог
+          </button>
+        </div>
       </div>
     </div>
   );
