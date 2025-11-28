@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { Transaction } from '../types';
 import { transactionFormatter } from '../utils/transactionFormatter';
 import { budgetCalculator } from '../utils/budgetCalculator';
@@ -9,7 +10,25 @@ interface LogViewProps {
   onNavigateToSettings: () => void;
   onSync: () => void;
   hasUnsynchronized: boolean;
+  isSyncing?: boolean;
+  syncError?: string | null;
 }
+
+// Функция для виброотдачи (haptic feedback) - как в iOS приложении
+const triggerHapticFeedback = () => {
+  try {
+    // Проверяем поддержку Vibration API
+    if ('vibrate' in navigator) {
+      // Для iOS PWA и Android - используем короткий паттерн вибрации
+      // Паттерн: короткий импульс (10ms), пауза (5ms), еще один короткий импульс (10ms)
+      // Это создает ощущение "легкого удара", как в iOS
+      navigator.vibrate([10, 5, 10]);
+    }
+  } catch (e) {
+    // Игнорируем ошибки, если вибрация не поддерживается
+    console.debug('Vibration not supported:', e);
+  }
+};
 
 export function LogView({
   transactions,
@@ -18,7 +37,15 @@ export function LogView({
   onNavigateToSettings,
   onSync,
   hasUnsynchronized,
+  isSyncing = false,
+  syncError = null,
 }: LogViewProps) {
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    transactionId: string | null;
+  } | null>(null);
+
   const grouped = transactionFormatter.groupByDate(transactions);
   
   // Получаем все даты из группировки
@@ -132,20 +159,76 @@ export function LogView({
                   ) : (
                     dayTransactions
                       .filter((t) => t.category !== 'бесплатный день')
-                      .map((transaction) => (
-                        <div
-                          key={transaction.id}
-                          className="px-2 py-1 flex justify-between"
-                          onContextMenu={(e) => {
-                            e.preventDefault();
-                            onDeleteTransaction(transaction.id);
-                          }}
-                        >
-                          <span>
-                            {transaction.amount} {transactionFormatter.formatCategory(transaction.category)}
-                          </span>
-                        </div>
-                      ))
+                      .map((transaction) => {
+                        let longPressTimer: number | null = null;
+                        let touchStartX = 0;
+                        let touchStartY = 0;
+
+                        const handleTouchStart = (e: React.TouchEvent) => {
+                          const touch = e.touches[0];
+                          touchStartX = touch.clientX;
+                          touchStartY = touch.clientY;
+                          
+                          longPressTimer = setTimeout(() => {
+                            // Вибрация для обратной связи (как в iOS)
+                            triggerHapticFeedback();
+                            
+                            // Показываем контекстное меню
+                            setContextMenu({
+                              x: touch.clientX,
+                              y: touch.clientY,
+                              transactionId: transaction.id,
+                            });
+                          }, 400); // 400ms для долгого нажатия
+                        };
+
+                        const handleTouchEnd = () => {
+                          if (longPressTimer) {
+                            clearTimeout(longPressTimer);
+                            longPressTimer = null;
+                          }
+                        };
+
+                        const handleTouchMove = (e: React.TouchEvent) => {
+                          // Если палец сдвинулся слишком далеко, отменяем долгое нажатие
+                          const touch = e.touches[0];
+                          const deltaX = Math.abs(touch.clientX - touchStartX);
+                          const deltaY = Math.abs(touch.clientY - touchStartY);
+                          
+                          if (deltaX > 10 || deltaY > 10) {
+                            handleTouchEnd();
+                          }
+                        };
+
+                        return (
+                          <div
+                            key={transaction.id}
+                            className="px-2 py-1 flex justify-between"
+                            style={{
+                              userSelect: 'none',
+                              WebkitUserSelect: 'none',
+                              touchAction: 'manipulation',
+                              WebkitTouchCallout: 'none',
+                            }}
+                            onContextMenu={(e) => {
+                              e.preventDefault();
+                              setContextMenu({
+                                x: e.clientX,
+                                y: e.clientY,
+                                transactionId: transaction.id,
+                              });
+                            }}
+                            onTouchStart={handleTouchStart}
+                            onTouchEnd={handleTouchEnd}
+                            onTouchMove={handleTouchMove}
+                            onTouchCancel={handleTouchEnd}
+                          >
+                            <span>
+                              {transaction.amount} {transactionFormatter.formatCategory(transaction.category)}
+                            </span>
+                          </div>
+                        );
+                      })
                   )}
                 </div>
               );
@@ -155,25 +238,89 @@ export function LogView({
       </div>
 
       {/* Sync button */}
-      {hasUnsynchronized && (
-        <button
-          onClick={onSync}
-          className="fixed bottom-20 right-4 w-14 h-14 bg-blue-500 text-white rounded-full shadow-lg flex items-center justify-center"
-        >
-          <svg
-            className="w-6 h-6"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
+      {(hasUnsynchronized || isSyncing) && (
+        <div className="fixed bottom-20 right-4 flex flex-col items-end gap-2">
+          {syncError && (
+            <div className="bg-red-100 text-red-700 px-4 py-2 rounded-lg text-sm max-w-xs">
+              {syncError}
+            </div>
+          )}
+          <button
+            onClick={onSync}
+            disabled={isSyncing}
+            className={`w-14 h-14 rounded-full shadow-lg flex items-center justify-center ${
+              isSyncing
+                ? 'bg-gray-400 cursor-not-allowed'
+                : 'bg-blue-500 hover:bg-blue-600'
+            } text-white`}
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-            />
-          </svg>
-        </button>
+            {isSyncing ? (
+              <svg
+                className="w-6 h-6 animate-spin"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                />
+              </svg>
+            ) : (
+              <svg
+                className="w-6 h-6"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                />
+              </svg>
+            )}
+          </button>
+        </div>
+      )}
+
+      {/* Context menu */}
+      {contextMenu && (
+        <>
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => setContextMenu(null)}
+            onTouchStart={() => setContextMenu(null)}
+          />
+          <div
+            className="fixed z-50 bg-white rounded-lg shadow-lg border border-gray-200 py-1 min-w-[150px]"
+            style={{
+              left: `${contextMenu.x}px`,
+              top: `${contextMenu.y}px`,
+            }}
+          >
+            <button
+              onClick={() => {
+                if (contextMenu.transactionId) {
+                  onDeleteTransaction(contextMenu.transactionId);
+                }
+                setContextMenu(null);
+              }}
+              className="w-full text-left px-4 py-2 text-red-600 hover:bg-red-50"
+            >
+              Удалить
+            </button>
+          </div>
+        </>
       )}
     </div>
   );

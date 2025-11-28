@@ -6,16 +6,62 @@ import { LogView } from './components/LogView';
 import { SettingsView } from './components/SettingsView';
 import { transactionFormatter } from './utils/transactionFormatter';
 import { transactionStorage } from './utils/transactionStorage';
+import { gistStorage, GistStorageError } from './utils/gistStorage';
 
 function App() {
   const [currentView, setCurrentView] = useState<View>('add');
-  const { transactions, isLoading, addTransaction, deleteTransaction, hasUnsynchronizedTransactions, clearAllTransactions } = useTransactions();
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const { transactions, isLoading, addTransaction, deleteTransaction, hasUnsynchronizedTransactions, clearAllTransactions, loadTransactions } = useTransactions();
 
-  const handleSync = () => {
-    // В офлайн-версии синхронизация просто сохраняет текущий timestamp
-    if (transactions.length > 0) {
-      const maxTimestamp = Math.max(...transactions.map((t) => t.timestamp));
-      transactionStorage.saveLastSyncTimestamp(maxTimestamp);
+  const handleSync = async () => {
+    console.log('Sync started');
+    
+    if (!gistStorage.hasToken()) {
+      console.error('No token');
+      setSyncError('GitHub токен не установлен. Установите токен в настройках.');
+      return;
+    }
+
+    setIsSyncing(true);
+    setSyncError(null);
+
+    try {
+      console.log('Initializing Gist...');
+      // Инициализируем Gist, если нужно
+      await gistStorage.initializeIfNeeded();
+      console.log('Gist initialized');
+
+      console.log('Syncing transactions, local count:', transactions.length);
+      // Синхронизируем локальные транзакции с Gist
+      const syncedTransactions = await gistStorage.syncWithGist(transactions);
+      console.log('Sync completed, synced count:', syncedTransactions.length);
+
+      // Сохраняем максимальный timestamp из синхронизированных транзакций
+      if (syncedTransactions.length > 0) {
+        const maxTimestamp = Math.max(...syncedTransactions.map((t) => t.timestamp));
+        transactionStorage.saveLastSyncTimestamp(maxTimestamp);
+      }
+
+      // Обновляем локальные транзакции
+      transactionStorage.saveTransactions(syncedTransactions);
+      loadTransactions();
+      console.log('Sync successful');
+    } catch (error) {
+      console.error('Sync error:', error);
+      let errorMessage = 'Ошибка синхронизации';
+      if (error === GistStorageError.INVALID_TOKEN) {
+        errorMessage = 'Неверный токен GitHub. Проверьте токен в настройках.';
+      } else if (error === GistStorageError.NETWORK_ERROR) {
+        errorMessage = 'Ошибка сети. Проверьте подключение к интернету.';
+      } else if (error === GistStorageError.GIST_NOT_FOUND) {
+        errorMessage = 'Gist не найден. Будет создан новый.';
+      } else if (error instanceof Error) {
+        errorMessage = `${error.message} (проверьте консоль для деталей)`;
+      }
+      setSyncError(errorMessage);
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -41,7 +87,7 @@ function App() {
   }
 
   return (
-    <div className="h-screen bg-white">
+    <div className="h-screen bg-white select-none">
       {currentView === 'add' && (
         <AddTransactionView
           transactions={transactions}
@@ -57,14 +103,18 @@ function App() {
           onNavigateToSettings={() => setCurrentView('settings')}
           onSync={handleSync}
           hasUnsynchronized={hasUnsynchronizedTransactions()}
+          isSyncing={isSyncing}
+          syncError={syncError}
         />
       )}
       {currentView === 'settings' && (
         <SettingsView
           onClose={() => setCurrentView('log')}
           onExport={handleExport}
-          onClearAll={() => {
+          onClearAll={async () => {
             if (confirm('Вы уверены, что хотите удалить все транзакции? Это действие нельзя отменить.')) {
+              // Очищаем только локальные транзакции
+              // Gist не трогаем - при следующей синхронизации данные из Gist вернутся
               clearAllTransactions();
             }
           }}

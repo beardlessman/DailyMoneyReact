@@ -6,3 +6,9 @@
 
 **Файлы:** `DailyMoneyReact/src/components/AddTransactionView.tsx`
 
+## 2. Haptic feedback при долгом нажатии на транзакцию не работает на iOS
+
+Vibration API (`navigator.vibrate()`) не работает в iOS Safari из-за ограничений безопасности. Нужно найти альтернативное решение для тактильной обратной связи при долгом нажатии на транзакцию.
+
+**Файлы:** `DailyMoneyReact/src/components/LogView.tsx`
+
